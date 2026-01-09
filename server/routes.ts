@@ -24,7 +24,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         body: JSON.stringify({
           text,
-          model_id: "eleven_monolingual_v1",
+          model_id: "eleven_turbo_v2_5",
           voice_settings: voiceSettings || {
             stability: 0.5,
             similarity_boost: 0.75,
