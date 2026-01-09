@@ -1,32 +1,20 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { Platform } from "react-native";
 
+/**
+ * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
+ * @returns {string} The API base URL
+ */
 export function getApiUrl(): string {
-  // 1) Allow hard override (best for sanity while debugging)
-  const envUrl =
-    (process.env.EXPO_PUBLIC_API_URL as string | undefined) ||
-    (process.env.REACT_APP_API_URL as string | undefined);
+  let host = process.env.EXPO_PUBLIC_DOMAIN;
 
-  if (envUrl && envUrl.trim()) return envUrl.replace(/\/$/, "");
-
-  // 2) Platform-safe defaults
-  // Android emulator must use 10.0.2.2 to reach host machine (your Mac)
-  // iOS simulator can use localhost
-  // Physical device must use your Mac LAN IP (e.g. http://192.168.1.23:1801)
-  try {
-    // Avoid importing Platform here if your web build complains;
-    // keep it runtime-safe.
-    // @ts-ignore
-    const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
-
-    if (isAndroid) return "http://10.0.2.2:1801";
-  } catch (e) {
-    // ignore
+  if (!host) {
+    throw new Error("EXPO_PUBLIC_DOMAIN is not set");
   }
 
-  return "http://127.0.0.1:1801";
-}
+  let url = new URL(`https://${host}`);
 
+  return url.href;
+}
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -55,13 +43,17 @@ export async function apiRequest(
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
-export const getQueryFn: <T>(options: { on401: UnauthorizedBehavior }) => QueryFunction<T> =
+export const getQueryFn: <T>(options: {
+  on401: UnauthorizedBehavior;
+}) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     const baseUrl = getApiUrl();
     const url = new URL(queryKey.join("/") as string, baseUrl);
 
-    const res = await fetch(url, { credentials: "include" });
+    const res = await fetch(url, {
+      credentials: "include",
+    });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;
@@ -80,6 +72,8 @@ export const queryClient = new QueryClient({
       staleTime: Infinity,
       retry: false,
     },
-    mutations: { retry: false },
+    mutations: {
+      retry: false,
+    },
   },
 });

@@ -3,7 +3,6 @@ import type { Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import * as fs from "fs";
 import * as path from "path";
-import "dotenv/config";
 
 const app = express();
 const log = console.log;
@@ -28,48 +27,25 @@ function setupCors(app: express.Application) {
       });
     }
 
-    const origin = req.headers.origin as string | undefined;
+    const origin = req.header("origin");
 
-    // Allow localhost origins for webview/dev (http/https + capacitor/ionic)
+    // Allow localhost origins for Expo web development (any port)
     const isLocalhost =
-      origin === "http://localhost" ||
-      origin === "https://localhost" ||
       origin?.startsWith("http://localhost:") ||
-      origin?.startsWith("https://localhost:") ||
-      origin === "http://127.0.0.1" ||
-      origin === "https://127.0.0.1" ||
-      origin?.startsWith("http://127.0.0.1:") ||
-      origin?.startsWith("https://127.0.0.1:") ||
-      origin === "capacitor://localhost" ||
-      origin === "ionic://localhost";
+      origin?.startsWith("http://127.0.0.1:");
 
-    const isAllowedOrigin = !!origin && (origins.has(origin) || isLocalhost);
-
-    // Always set preflight headers (even if Origin gets stripped upstream)
-    res.setHeader(
-      "Access-Control-Allow-Methods",
-      "GET, POST, PUT, DELETE, OPTIONS",
-    );
-
-    const reqHeaders =
-      (req.headers["access-control-request-headers"] as string | undefined) ||
-      "content-type, authorization";
-
-    res.setHeader("Access-Control-Allow-Headers", reqHeaders);
-
-    if (isAllowedOrigin) {
-      // echo allowed origin
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Vary", "Origin");
-      res.setHeader("Access-Control-Allow-Credentials", "true");
-    } else if (!origin) {
-      // if Origin is missing (proxy stripped it), still allow preflight
-      // NOTE: cannot use '*' with credentials, so do NOT set Allow-Credentials here
-      res.setHeader("Access-Control-Allow-Origin", "*");
+    if (origin && (origins.has(origin) || isLocalhost)) {
+      res.header("Access-Control-Allow-Origin", origin);
+      res.header(
+        "Access-Control-Allow-Methods",
+        "GET, POST, PUT, DELETE, OPTIONS",
+      );
+      res.header("Access-Control-Allow-Headers", "Content-Type");
+      res.header("Access-Control-Allow-Credentials", "true");
     }
 
     if (req.method === "OPTIONS") {
-      return res.status(204).end();
+      return res.sendStatus(200);
     }
 
     next();
@@ -91,7 +67,7 @@ function setupBodyParsing(app: express.Application) {
 function setupRequestLogging(app: express.Application) {
   app.use((req, res, next) => {
     const start = Date.now();
-    const requestPath = req.path;
+    const path = req.path;
     let capturedJsonResponse: Record<string, unknown> | undefined = undefined;
 
     const originalResJson = res.json;
@@ -101,11 +77,11 @@ function setupRequestLogging(app: express.Application) {
     };
 
     res.on("finish", () => {
-      if (!requestPath.startsWith("/api")) return;
+      if (!path.startsWith("/api")) return;
 
       const duration = Date.now() - start;
 
-      let logLine = `${req.method} ${requestPath} ${res.statusCode} in ${duration}ms`;
+      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
@@ -252,42 +228,19 @@ function setupErrorHandler(app: express.Application) {
 
   configureExpoAndLanding(app);
 
-  // ---- FORCE CORS PREFLIGHT HANDLING (proxy/workers workaround) ----
-  // NOTE: you had this twice; keeping ONE clean copy.
-  app.options("/api/*", (req, res) => {
-    const origin = req.headers.origin as string | undefined;
-
-    if (origin) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Vary", "Origin");
-      res.setHeader("Access-Control-Allow-Credentials", "true");
-    } else {
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      // NOTE: cannot use '*' with credentials, so do not set Allow-Credentials here
-    }
-
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      (req.headers["access-control-request-headers"] as string | undefined) ||
-        "content-type,authorization",
-    );
-
-    return res.status(204).end();
-  });
-
   const server = await registerRoutes(app);
 
   setupErrorHandler(app);
 
-  const port = parseInt(process.env.PORT || "1801", 10);
-
-
-  // ✅ macOS/Node v22 safe listen form (fixes ENOTSUP)
-  const host = process.env.REPL_ID ? "0.0.0.0" : "127.0.0.1";
-
-server.listen(port, host, () => {
-  log(`express server serving on http://${host}:${port}`);
-});
-
+  const port = parseInt(process.env.PORT || "5000", 10);
+  server.listen(
+    {
+      port,
+      host: "0.0.0.0",
+      reusePort: true,
+    },
+    () => {
+      log(`express server serving on port ${port}`);
+    },
+  );
 })();
