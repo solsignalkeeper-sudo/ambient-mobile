@@ -1,8 +1,8 @@
-# Ambient Encounters
+# Ambient Encouragement
 
 ## Overview
 
-Ambient Encounters is a cross-platform mobile application built with React Native and Expo designed to help users with ADHD focus through ambient soundscapes and encouraging voice affirmations. The app plays calming background sounds (Nature, Office, Café, City) while periodically delivering motivational phrases using Eleven Labs voice synthesis.
+Ambient Encouragement is a cross-platform mobile application built with React Native and Expo designed to help users with ADHD focus through ambient soundscapes and encouraging voice affirmations. The app plays calming background sounds (Nature, Indoor, Focus categories) while periodically delivering personalized motivational phrases using Eleven Labs voice synthesis. Audio continues playing in the background when the user switches to other apps.
 
 ## User Preferences
 
@@ -58,13 +58,16 @@ Preferred communication style: Simple, everyday language.
 
 ### Key Features
 
-1. **Ambient Sound Player**: Four environment soundscapes (Nature, Office, Café, City) with looping playback
-2. **Voice Encouragement**: Eleven Labs TTS integration with multiple voice characters (Sarah, Bill, George, Charlie, Random)
-3. **Voice Modes**: Gentle, Motivating, or Calm phrase styles
-4. **Frequency Control**: Configurable encouragement intervals (1, 3, 5, 10, 15 minutes)
-5. **Volume Control**: Independent sliders for background and voice volume
-6. **Swipe Navigation**: Gesture-based page switching between Player and Phrases screens
-7. **Settings Persistence**: All preferences saved locally via AsyncStorage
+1. **Ambient Sound Player**: Six environment soundscapes (Forest Birds, Gentle Rain, Thunder Storm, Coffee Shop, Office Typing, Rain on Window) with looping playback
+2. **Background Audio**: Audio continues playing when app is backgrounded or screen is locked
+3. **Personalized Encouragement**: Enter your name to receive voice phrases that address you personally
+4. **Voice Encouragement**: Eleven Labs TTS integration with multiple voice characters (Sarah, Bill, George, Charlie, Random)
+5. **Voice Modes**: Gentle, Motivating, or Calm phrase styles
+6. **Frequency Control**: Configurable encouragement intervals (1, 3, 5, 10, 15 minutes)
+7. **Volume Control**: Independent sliders for background and voice volume
+8. **Dark/Light Mode Toggle**: Cycle between light, dark, and system theme modes
+9. **Swipe Navigation**: Gesture-based page switching between Player and Phrases screens
+10. **Settings Persistence**: All preferences saved locally via AsyncStorage
 
 ### External Dependencies
 
