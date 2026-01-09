@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+<<<<<<< HEAD
 import type { AppSettings, CustomPhrase } from "./types";
 import { DEFAULT_SETTINGS } from "./types";
 
@@ -32,19 +33,44 @@ export async function getCustomPhrases(): Promise<CustomPhrase[]> {
     return JSON.parse(data);
   } catch (error) {
     console.error("Failed to load custom phrases:", error);
+=======
+import type { Encounter, UserProfile } from "./types";
+
+const ENCOUNTERS_KEY = "@ambient_encounters";
+const PROFILE_KEY = "@ambient_profile";
+
+export async function getEncounters(): Promise<Encounter[]> {
+  try {
+    const data = await AsyncStorage.getItem(ENCOUNTERS_KEY);
+    if (!data) return [];
+    return JSON.parse(data);
+  } catch (error) {
+    console.error("Failed to load encounters:", error);
+>>>>>>> 8dbaa34 (Update app configuration and navigation for mobile platforms)
     return [];
   }
 }
 
+<<<<<<< HEAD
 export async function saveCustomPhrases(phrases: CustomPhrase[]): Promise<void> {
   try {
     await AsyncStorage.setItem(CUSTOM_PHRASES_KEY, JSON.stringify(phrases));
   } catch (error) {
     console.error("Failed to save custom phrases:", error);
+=======
+export async function saveEncounter(encounter: Encounter): Promise<void> {
+  try {
+    const encounters = await getEncounters();
+    encounters.unshift(encounter);
+    await AsyncStorage.setItem(ENCOUNTERS_KEY, JSON.stringify(encounters));
+  } catch (error) {
+    console.error("Failed to save encounter:", error);
+>>>>>>> 8dbaa34 (Update app configuration and navigation for mobile platforms)
     throw error;
   }
 }
 
+<<<<<<< HEAD
 export async function addCustomPhrase(text: string): Promise<CustomPhrase> {
   const phrases = await getCustomPhrases();
   const newPhrase: CustomPhrase = {
@@ -91,6 +117,53 @@ export async function importPhrases(lines: string[]): Promise<number> {
   
   await saveCustomPhrases(phrases);
   return addedCount;
+=======
+export async function updateEncounter(encounter: Encounter): Promise<void> {
+  try {
+    const encounters = await getEncounters();
+    const index = encounters.findIndex((e) => e.id === encounter.id);
+    if (index !== -1) {
+      encounters[index] = encounter;
+      await AsyncStorage.setItem(ENCOUNTERS_KEY, JSON.stringify(encounters));
+    }
+  } catch (error) {
+    console.error("Failed to update encounter:", error);
+    throw error;
+  }
+}
+
+export async function deleteEncounter(id: string): Promise<void> {
+  try {
+    const encounters = await getEncounters();
+    const filtered = encounters.filter((e) => e.id !== id);
+    await AsyncStorage.setItem(ENCOUNTERS_KEY, JSON.stringify(filtered));
+  } catch (error) {
+    console.error("Failed to delete encounter:", error);
+    throw error;
+  }
+}
+
+export async function getProfile(): Promise<UserProfile> {
+  try {
+    const data = await AsyncStorage.getItem(PROFILE_KEY);
+    if (!data) {
+      return { displayName: "Wanderer", avatarType: 1 };
+    }
+    return JSON.parse(data);
+  } catch (error) {
+    console.error("Failed to load profile:", error);
+    return { displayName: "Wanderer", avatarType: 1 };
+  }
+}
+
+export async function saveProfile(profile: UserProfile): Promise<void> {
+  try {
+    await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  } catch (error) {
+    console.error("Failed to save profile:", error);
+    throw error;
+  }
+>>>>>>> 8dbaa34 (Update app configuration and navigation for mobile platforms)
 }
 
 export function generateId(): string {

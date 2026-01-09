@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 export interface VoiceCharacter {
   id: string;
   name: string;
@@ -95,3 +96,39 @@ export const DEFAULT_SETTINGS: AppSettings = {
   userName: "",
   themeMode: "system",
 };
+=======
+export interface Encounter {
+  id: string;
+  title: string;
+  description: string;
+  photoUri: string | null;
+  location: {
+    latitude: number;
+    longitude: number;
+    label: string;
+  } | null;
+  moods: string[];
+  isPrivate: boolean;
+  createdAt: string;
+}
+
+export const MOOD_OPTIONS = [
+  "Peaceful",
+  "Inspired",
+  "Curious",
+  "Grateful",
+  "Joyful",
+  "Reflective",
+  "Serene",
+  "Wonder",
+  "Connected",
+  "Hopeful",
+] as const;
+
+export type Mood = typeof MOOD_OPTIONS[number];
+
+export interface UserProfile {
+  displayName: string;
+  avatarType: 1 | 2;
+}
+>>>>>>> 8dbaa34 (Update app configuration and navigation for mobile platforms)

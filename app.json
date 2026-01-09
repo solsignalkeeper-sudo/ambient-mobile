@@ -1,25 +1,37 @@
 {
   "expo": {
-    "name": "my-app",
-    "slug": "my-app",
+    "name": "Ambient Encounters",
+    "slug": "ambient-encounters",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "scheme": "ambientencounters",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ambientencounters.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We need your location to tag encounters with where they happened.",
+        "NSCameraUsageDescription": "We need camera access to capture photos of your encounters.",
+        "NSPhotoLibraryUsageDescription": "We need access to your photo library to add images to your encounters."
+      }
     },
     "android": {
+      "package": "com.ambientencounters.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#F7F8FC",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "output": "single",
@@ -32,13 +44,25 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#F7F8FC",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#1A1B1E"
           }
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Ambient Encounters to use your location to tag encounters."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Ambient Encounters to access your photos to add images to encounters."
+        }
+      ]
     ],
     "experiments": {
       "reactCompiler": true
