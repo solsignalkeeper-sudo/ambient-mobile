@@ -12,9 +12,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.ambientencounters.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "We need your location to tag encounters with where they happened.",
-        "NSCameraUsageDescription": "We need camera access to capture photos of your encounters.",
-        "NSPhotoLibraryUsageDescription": "We need access to your photo library to add images to your encounters."
+        "UIBackgroundModes": ["audio"],
+        "NSMicrophoneUsageDescription": "This app does not need microphone access."
       }
     },
     "android": {
@@ -26,12 +25,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.CAMERA"
-      ]
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "single",
@@ -52,15 +46,9 @@
       ],
       "expo-web-browser",
       [
-        "expo-location",
+        "expo-av",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Ambient Encounters to use your location to tag encounters."
-        }
-      ],
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "Allow Ambient Encounters to access your photos to add images to encounters."
+          "microphonePermission": "This app does not need microphone access."
         }
       ]
     ],

@@ -2,9 +2,7 @@
 
 ## Overview
 
-Ambient Encounters is a cross-platform mobile application built with React Native and Expo that helps users capture and reflect on meaningful encounters in their daily life. Users can document people, places, moments, or experiences with photos, locations, mood tags, and personal reflections. The app features a mindful, organic minimalist design with soft gradients and calming aesthetics.
-
-The application uses a client-server architecture with an Express backend and supports both local offline storage and optional cloud sync capabilities.
+Ambient Encounters is a cross-platform mobile application built with React Native and Expo designed to help users with ADHD focus through ambient soundscapes and encouraging voice affirmations. The app plays calming background sounds (Nature, Office, Café, City) while periodically delivering motivational phrases using Eleven Labs voice synthesis.
 
 ## User Preferences
 
@@ -16,15 +14,14 @@ Preferred communication style: Simple, everyday language.
 
 **Framework**: React Native with Expo SDK 54, using the new architecture (Fabric/TurboModules enabled)
 
-**Navigation**: React Navigation v7 with a hybrid structure:
-- Root stack navigator handles main flows and modals
-- Bottom tab navigator provides primary navigation between Discover, Map, Journal, and Profile screens
-- Floating action button overlays the tab bar for creating new encounters
+**Navigation**: Two-page swipe navigation using react-native-reanimated gestures:
+- Player screen: Main ambient sound player with environment selection, volume controls, and voice settings
+- Phrases screen: View and customize encouragement phrases by voice mode
 
 **State Management**: 
 - TanStack React Query for server state and data fetching
 - Local component state with React hooks for UI state
-- AsyncStorage for persistent local data storage
+- AsyncStorage for persistent settings storage
 
 **Styling Approach**:
 - Custom theme system with light/dark mode support via `useTheme` hook
@@ -32,74 +29,53 @@ Preferred communication style: Simple, everyday language.
 - StyleSheet-based component styling
 - Manrope font family from Google Fonts
 
-**Animation**: React Native Reanimated for performant, gesture-based animations with spring physics
+**Animation**: React Native Reanimated for performant gesture-based swipe navigation and pulse animations
 
-**Key Design Patterns**:
-- Path aliases (`@/` for client, `@shared/` for shared code) configured via babel-plugin-module-resolver
-- Custom hooks for reusable logic (`useTheme`, `useScreenOptions`, `useEncounters`)
-- Compound component patterns for UI elements (ThemedText, ThemedView)
-- Error boundary for graceful error handling
+**Audio**: expo-av for background ambient sound playback and voice affirmation audio
 
 ### Backend Architecture
 
 **Server**: Express.js with TypeScript, running on Node.js
 
-**API Structure**: RESTful endpoints prefixed with `/api` (routes defined in `server/routes.ts`)
+**API Structure**: 
+- `/api/tts` - Text-to-speech endpoint that proxies to Eleven Labs API
 
-**Storage Layer**: 
-- Abstract storage interface (`IStorage`) in `server/storage.ts` for flexibility
-- In-memory storage implementation (`MemStorage`) as default
-- Designed for easy swap to database-backed storage
-
-**Database Schema**: Drizzle ORM with PostgreSQL dialect
-- Schema defined in `shared/schema.ts` using Drizzle's type-safe table definitions
-- Zod integration via `drizzle-zod` for runtime validation
-- Migration output configured to `./migrations` directory
+**Environment Variables**:
+- `ELEVENLABS_API_KEY` - Required for voice synthesis
 
 ### Data Flow
 
-1. Client components use custom hooks (`useEncounters`, `useProfile`) that wrap React Query
-2. For local-first features, data persists to AsyncStorage via `client/lib/storage.ts`
-3. API requests go through `client/lib/query-client.ts` with automatic URL construction
-4. Server processes requests and interacts with storage layer
+1. User settings persist to AsyncStorage via `client/lib/storage.ts`
+2. React Query hooks provide reactive access to settings
+3. TTS requests go through `/api/tts` endpoint to proxy Eleven Labs calls
+4. Audio playback handled by expo-av with looping background sounds
 
 ### Build & Development
 
 **Development**: 
-- `npm run expo:dev` - Starts Expo development server with Replit-specific environment variables
+- `npm run expo:dev` - Starts Expo development server
 - `npm run server:dev` - Runs Express server with tsx for TypeScript support
 
-**Production**:
-- Static web build via custom `scripts/build.js` that handles Metro bundling
-- Server bundled with esbuild to `server_dist/`
+### Key Features
 
-## External Dependencies
+1. **Ambient Sound Player**: Four environment soundscapes (Nature, Office, Café, City) with looping playback
+2. **Voice Encouragement**: Eleven Labs TTS integration with multiple voice characters (Sarah, Bill, George, Charlie, Random)
+3. **Voice Modes**: Gentle, Motivating, or Calm phrase styles
+4. **Frequency Control**: Configurable encouragement intervals (1, 3, 5, 10, 15 minutes)
+5. **Volume Control**: Independent sliders for background and voice volume
+6. **Swipe Navigation**: Gesture-based page switching between Player and Phrases screens
+7. **Settings Persistence**: All preferences saved locally via AsyncStorage
 
-### Mobile Platform Services
-- **expo-location**: GPS and geocoding for tagging encounters with location
-- **expo-image-picker**: Camera and photo library access for encounter photos
-- **expo-haptics**: Tactile feedback for user interactions
-- **react-native-maps**: Map visualization for location-based encounters
+### External Dependencies
 
-### UI/UX Libraries
-- **expo-blur / expo-glass-effect**: Frosted glass effects for headers and overlays
-- **expo-linear-gradient**: Gradient backgrounds for ambient aesthetic
-- **expo-image**: Optimized image loading with caching
+- **expo-av**: Audio playback for ambient sounds and TTS voice
+- **@react-native-community/slider**: Volume control sliders
+- **react-native-reanimated**: Gesture-based swipe navigation
+- **react-native-gesture-handler**: Pan gesture detection
+- **@tanstack/react-query**: Data fetching and caching
 - **@expo-google-fonts/manrope**: Brand typography
 
-### Data & Storage
-- **@react-native-async-storage/async-storage**: Local persistent storage for offline-first functionality
-- **@tanstack/react-query**: Data fetching, caching, and synchronization
-- **drizzle-orm / pg**: PostgreSQL database ORM (schema prepared, database provisioning required)
-
-### Navigation & Gestures
-- **@react-navigation/native**: Core navigation library
-- **@react-navigation/bottom-tabs**: Tab-based navigation
-- **@react-navigation/native-stack**: Native stack navigation
-- **react-native-gesture-handler**: Touch gesture system
-- **react-native-screens**: Native screen containers
-
 ### Environment Requirements
-- `DATABASE_URL`: PostgreSQL connection string (required for database features)
+
+- `ELEVENLABS_API_KEY`: Required for voice synthesis (stored as secret)
 - `EXPO_PUBLIC_DOMAIN`: API domain for client-server communication
-- `REPLIT_DEV_DOMAIN` / `REPLIT_DOMAINS`: Replit-specific domain configuration for CORS
