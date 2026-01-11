@@ -1,0 +1,8 @@
+{
+  "appId": "com.solsignalkeeper.ambientmobile",
+  "appName": "Ambient Mobile",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
+
+

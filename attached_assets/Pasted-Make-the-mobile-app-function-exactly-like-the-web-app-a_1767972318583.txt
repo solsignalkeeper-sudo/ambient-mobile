@@ -1,0 +1,65 @@
+Make the mobile app function exactly like the web app and implement a two screen swipe layout
+Core requirement
+The mobile app must behave exactly like the existing web app using the same state logic and features
+Do not create a separate simplified mobile version
+Keep all existing controls and features including Encourage Me button volume sliders voice selector environment selector and timers
+Two screen swipe layout
+Replace the current navigation with a two page swipe interface like the web app
+Screen 1 is Player
+Screen 2 is Phrases
+User must be able to swipe left and right between the two screens
+Keep bottom navigation optional for tapping but swipe must be the primary way
+Use a stable lightweight swipe solution such as react swipeable or a minimal custom swipe pager
+Avoid hook ordering changes that break hot reload
+Fix no sound and make environments match their titles
+Currently there is no sound or the sounds do not match the environment
+Each environment must have realistic ambient background audio that matches the label and loops continuously
+Environments
+City
+Cafe coffee shop diner
+Office work environment
+Nature outside rain wind birds
+Audio requirements
+Use real audio files not synthetic noise
+Loop continuously
+Loop must be seamless with no obvious restart click or gap
+Crossfade when switching environments so it is smooth
+Mobile audio requirement
+On iOS and mobile browsers audio must only start after a user gesture
+Ensure Play button resumes AudioContext and starts playback reliably on mobile
+Ambient audio assets
+If you cannot source good audio automatically create an assets folder and wire the system so I can upload the audio files
+Use multiple layered tracks per environment if possible and mix them with Web Audio API
+Do not ship with random weird placeholder sounds
+City must sound like traffic distant voices footsteps
+Cafe must sound like cups light chatter espresso
+Office must sound like typing low chatter printer
+Nature must sound like rain wind birds
+Voices and personas using ElevenLabs
+The encouragement voice must use ElevenLabs voices not browser speech
+Voices are selectable on the Player screen
+Example voices Sarah George and others
+Each voice profile has its own persona style such as wise calming funny hippy supportive
+When the user selects a voice the spoken encouragement should use that persona
+Ensure the voice sounds natural and immersive and blends into the ambient soundscape
+Duck the background slightly during speech then restore after
+Phrases and persona libraries
+Each voice persona must have at least 30 encouragement phrases
+Phrases should be grouped by persona and selectable
+User can choose which phrase group is active or choose Custom
+Custom phrases must allow add edit delete
+Also add an option to upload a list of phrases such as paste multiple lines and import them
+Do not remove existing phrase management features keep them and enhance them
+Encouragement timing and on demand
+Keep frequency selection and timers working
+Encourage Me button must trigger an immediate phrase without breaking the scheduled timer
+Avoid repeating the same phrase back to back
+Validation checklist after changes
+Swipe left right switches between Player and Phrases
+All controls work on mobile exactly as web
+Play button produces ambient sound
+Each environment matches its label
+Audio loops seamlessly and crossfades on environment change
+ElevenLabs voice works and changes when voice is selected
+Phrases screen shows persona groups and custom phrases and supports import list
+No console errors after a full reload

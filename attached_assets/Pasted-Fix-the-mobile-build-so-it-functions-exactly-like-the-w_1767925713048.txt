@@ -1,0 +1,45 @@
+Fix the mobile build so it functions exactly like the web app using the same source code and same audio and voice behavior
+Current problem
+The mobile version does not behave like the web app and key features do not work
+The mobile app must use the same React app files as the web app not a separate or simplified screen set
+Do not rebuild a second app
+Make mobile an exact shell of the existing web app
+Navigation requirement
+Player and Phrases must be swipe navigation
+Implement a two page swipe view where the user can swipe left or right between Player and Phrases
+Also keep bottom nav icons as optional tap navigation but swipe must work
+Use a simple horizontal swipe pager implementation such as
+react swipeable or a minimal custom swipe handler
+Do not introduce unstable hook changes
+Behavior parity
+Player screen must work exactly as web
+Audio playback must work
+Environment selection must work
+Volume sliders must work
+Encourage Me button must trigger immediate encouragement and must not break the timer
+Voice must work the same as web and use the same voice settings
+Phrases screen must allow add edit delete and use the same local storage state as web
+Mobile wrapper requirement
+If this is being wrapped via Expo Go or a mobile preview
+Ensure audio works on mobile browsers and iOS Safari style restrictions
+Audio must only start after a user gesture such as pressing play
+Ensure the play button triggers the AudioContext resume and starts playback
+Ensure the same logic is used in web and mobile builds
+Build system consistency
+Use the same Vite build output index html root mount and assets
+index html uses root div and module script assets
+Make sure mobile build points to the same compiled bundle and does not load an outdated cached bundle
+If the mobile wrapper is using a different url or build output fix it so it loads the same current deployed build
+Bug fix guidance
+Avoid hook ordering changes that cause hot reload hook mismatch
+If hook count changes require full reload or restart dev server but keep final code stable
+Fix any scroll area or tab components that break on mobile
+Verify state persistence and that local storage reads and writes work on mobile
+Verification checklist
+After changes confirm
+Swipe left right moves between Player and Phrases
+All functions match web app including audio and voice
+Encourage Me works on demand
+Environment audio matches the selected title
+No broken controls in mobile preview
+No console errors after a fresh reload
