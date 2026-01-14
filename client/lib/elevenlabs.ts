@@ -90,13 +90,12 @@ export async function generateAndPlayAffirmation(
       }),
     });
 
-    if (!response.ok) {
-      console.warn("TTS API unavailable, showing text only");
-      if (duckBackgroundVolume) {
-        duckBackgroundVolume(false);
+          if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        console.warn("TTS API failed:", response.status, response.statusText, text);
+        if (duckBackgroundVolume) duckBackgroundVolume(false);
+        return phrase;
       }
-      return phrase;
-    }
 
     const audioBlob = await response.blob();
     let audioUri: string;

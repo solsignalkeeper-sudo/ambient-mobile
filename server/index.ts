@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
@@ -14,43 +16,78 @@ declare module "http" {
 }
 
 function setupCors(app: express.Application) {
-  app.use((req, res, next) => {
-    const origins = new Set<string>();
+  // ✅ Env debug (SAFE: prefix + length only)
+app.get("/api/_env", (_req, res) => {
+  const k = process.env.ELEVENLABS_API_KEY || "";
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    hasKey: !!k,
+    prefix: k.slice(0, 3),
+    len: k.length,
+    nodeEnv: process.env.NODE_ENV || "",
+  });
+});
+
+  // ✅ Simple ping to confirm the live server is ours
+  app.get("/api/_ping", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ ok: true, ts: Date.now(), cors: "v4-fixed" });
+  });
+
+  function isOriginAllowed(origin: string): boolean {
+    const allowedOrigins = new Set<string>();
 
     if (process.env.REPLIT_DEV_DOMAIN) {
-      origins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
+      allowedOrigins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
     }
 
     if (process.env.REPLIT_DOMAINS) {
       process.env.REPLIT_DOMAINS.split(",").forEach((d) => {
-        origins.add(`https://${d.trim()}`);
+        const dom = d.trim();
+        if (dom) allowedOrigins.add(`https://${dom}`);
       });
     }
 
-    const origin = req.header("origin");
+    // ✅ Allow Capacitor / Android WebView + localhost (with OR without port)
+    const isLocalOrigin =
+      origin === "http://localhost" ||
+      origin.startsWith("http://localhost:") ||
+      origin === "http://127.0.0.1" ||
+      origin.startsWith("http://127.0.0.1:") ||
+      origin === "capacitor://localhost" ||
+      origin === "ionic://localhost" ||
+      origin === "https://localhost" ||
+      origin.startsWith("https://localhost:");
 
-    // Allow localhost origins for Expo web development (any port)
-    const isLocalhost =
-      origin?.startsWith("http://localhost:") ||
-      origin?.startsWith("http://127.0.0.1:");
+    return !!origin && (allowedOrigins.has(origin) || isLocalOrigin);
+  }
 
-    if (origin && (origins.has(origin) || isLocalhost)) {
-      res.header("Access-Control-Allow-Origin", origin);
-      res.header(
-        "Access-Control-Allow-Methods",
-        "GET, POST, PUT, DELETE, OPTIONS",
-      );
-      res.header("Access-Control-Allow-Headers", "Content-Type");
-      res.header("Access-Control-Allow-Credentials", "true");
-    }
+  function applyCors(req: Request, res: Response) {
+    const origin = req.header("origin") || "";
+    if (!isOriginAllowed(origin)) return;
 
-    if (req.method === "OPTIONS") {
-      return res.sendStatus(200);
-    }
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
 
+  // ✅ GUARANTEE: /api/tts preflight always gets the right CORS headers
+  app.options("/api/tts", (req, res) => {
+    applyCors(req, res);
+    return res.sendStatus(200);
+  });
+
+  // ✅ Global CORS application + fast OPTIONS
+  app.use((req, res, next) => {
+    applyCors(req, res);
+    if (req.method === "OPTIONS") return res.sendStatus(200);
     next();
   });
 }
+
+
 
 function setupBodyParsing(app: express.Application) {
   app.use(
@@ -67,7 +104,7 @@ function setupBodyParsing(app: express.Application) {
 function setupRequestLogging(app: express.Application) {
   app.use((req, res, next) => {
     const start = Date.now();
-    const path = req.path;
+    const reqPath = req.path;
     let capturedJsonResponse: Record<string, unknown> | undefined = undefined;
 
     const originalResJson = res.json;
@@ -77,11 +114,11 @@ function setupRequestLogging(app: express.Application) {
     };
 
     res.on("finish", () => {
-      if (!path.startsWith("/api")) return;
+      if (!reqPath.startsWith("/api")) return;
 
       const duration = Date.now() - start;
 
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      let logLine = `${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
@@ -232,17 +269,17 @@ function setupErrorHandler(app: express.Application) {
 
   setupErrorHandler(app);
 
-  const port = parseInt(process.env.PORT || "5000", 10);
+  const port = parseInt(process.env.PORT || "1801", 10);
+  const host = process.env.HOST || "0.0.0.0";
 
-server.listen(
-  {
-    port,
-    host: "127.0.0.1", // macOS + Node 22 fix (no 0.0.0.0)
-    reusePort: false,
-  },
-  () => {
-    log(`express server serving on http://127.0.0.1:${port}`);
-  },
-);
+  // IMPORTANT: no reusePort (it causes ENOTSUP on some mac setups)
+  server.listen(port, host, () => {
+    log(
+      `express server serving on http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}`,
+    );
+  });
 
+  server.on("error", (err: any) => {
+    console.error("Server listen error:", err);
+  });
 })();

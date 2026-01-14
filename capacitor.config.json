@@ -1,7 +1,9 @@
 {
-  "appId": "com.solsignalkeeper.ambientmobile",
-  "appName": "Ambient Mobile",
+  "appId": "com.ambient.mobile",
+  "appName": "Ambient Encounters",
   "webDir": "www",
-  "bundledWebRuntime": false
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  }
 }
-

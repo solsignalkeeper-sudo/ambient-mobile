@@ -1,20 +1,18 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getSettings,
   saveSettings,
   getCustomPhrases,
+  saveCustomPhrases,
   addCustomPhrase,
   deleteCustomPhrase,
   updateCustomPhrase,
   importPhrases,
 } from "./storage";
-import type { AppSettings, CustomPhrase } from "./types";
+import type { AppSettings } from "./types";
 
-/**
- * Settings
- */
 export function useSettings() {
-  return useQuery<AppSettings>({
+  return useQuery({
     queryKey: ["settings"],
     queryFn: getSettings,
   });
@@ -22,7 +20,6 @@ export function useSettings() {
 
 export function useUpdateSettings() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (settings: AppSettings) => saveSettings(settings),
     onSuccess: () => {
@@ -31,21 +28,27 @@ export function useUpdateSettings() {
   });
 }
 
-/**
- * Custom Phrases
- */
 export function useCustomPhrases() {
-  return useQuery<CustomPhrase[]>({
+  return useQuery({
     queryKey: ["customPhrases"],
     queryFn: getCustomPhrases,
   });
 }
 
+export function useSaveCustomPhrases() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: saveCustomPhrases,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customPhrases"] });
+    },
+  });
+}
+
 export function useAddCustomPhrase() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: (text: string) => addCustomPhrase(text),
+    mutationFn: addCustomPhrase,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customPhrases"] });
     },
@@ -54,9 +57,8 @@ export function useAddCustomPhrase() {
 
 export function useDeleteCustomPhrase() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: (id: string) => deleteCustomPhrase(id),
+    mutationFn: deleteCustomPhrase,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customPhrases"] });
     },
@@ -65,10 +67,9 @@ export function useDeleteCustomPhrase() {
 
 export function useUpdateCustomPhrase() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: (args: { id: string; text: string }) =>
-      updateCustomPhrase(args.id, args.text),
+    mutationFn: ({ id, text }: { id: string; text: string }) =>
+      updateCustomPhrase(id, text),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customPhrases"] });
     },
@@ -77,9 +78,8 @@ export function useUpdateCustomPhrase() {
 
 export function useImportPhrases() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: (phrases: string[] | string) => importPhrases(phrases as any),
+    mutationFn: importPhrases,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customPhrases"] });
     },

@@ -2,6 +2,39 @@ import type { Express } from "express";
 import { createServer, type Server } from "node:http";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+    app.get("/api/_env", (_req, res) => {
+  const k = process.env.ELEVENLABS_API_KEY || "";
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    hasKey: !!k,
+    prefix: k.slice(0, 3),
+    len: k.length,
+    nodeEnv: process.env.NODE_ENV || "",
+  });
+});
+
+  app.get("/api/_env", (_req, res) => {
+    const k = process.env.ELEVENLABS_API_KEY || "";
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      hasKey: !!k,
+      prefix: k.slice(0, 3),
+      len: k.length,
+      nodeEnv: process.env.NODE_ENV || "",
+    });
+  });
+  
+  // SAFE env debug (does not leak key)
+  app.get("/api/_env", (_req, res) => {
+    const k = process.env.ELEVENLABS_API_KEY || "";
+    res.json({
+      hasKey: !!k,
+      prefix: k.slice(0, 3),
+      len: k.length,
+      nodeEnv: process.env.NODE_ENV || "",
+    });
+  });
+
   app.post("/api/tts", async (req, res) => {
     const apiKey = process.env.ELEVENLABS_API_KEY;
 
