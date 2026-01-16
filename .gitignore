@@ -43,3 +43,9 @@ app-example
 /android
 .env
 .env.production
+
+# Build output
+www/
+server_dist/
+static-build/
+*.mp3
