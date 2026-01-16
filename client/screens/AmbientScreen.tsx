@@ -20,7 +20,12 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
 import { useSettings, useUpdateSettings } from "@/lib/hooks";
-import { generateAndPlayAffirmation, getRandomAffirmation } from "@/lib/elevenlabs";
+import {
+  generateAndPlayAffirmation,
+  getRandomAffirmation,
+  stopTtsPlayback,
+} from "@/lib/elevenlabs";
+
 import { AMBIENT_SOUNDS, SOUND_CATEGORIES, getSoundById, getDefaultSound } from "@/lib/sounds";
 import {
   VOICE_CHARACTERS,
@@ -44,6 +49,8 @@ export default function AmbientScreen() {
   const [currentPhrase, setCurrentPhrase] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [showSoundPicker, setShowSoundPicker] = useState(false);
+const bgStartTokenRef = useRef(0);
+const bgStartingRef = useRef(false);
 
   const backgroundSoundRef = useRef<Audio.Sound | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -52,115 +59,174 @@ export default function AmbientScreen() {
 
   const pulseScale = useSharedValue(1);
 
-  useEffect(() => {
-    if (savedSettings) {
-      setSettings(savedSettings);
-      normalVolumeRef.current = savedSettings.backgroundVolume;
+ // --- SETTINGS HYDRATION (preserve live play/pause state) ---
+useEffect(() => {
+  if (!savedSettings) return;
+
+  setSettings((prev) => {
+    const keepIsPlaying = prev.isPlaying; // prevent refetch flip
+    return {
+      ...prev,
+      ...savedSettings,
+      isPlaying: keepIsPlaying,
+    };
+  });
+
+  normalVolumeRef.current = savedSettings.backgroundVolume;
+}, [savedSettings]);
+
+// --- PULSE ANIMATION ---
+useEffect(() => {
+  if (settings.isPlaying) {
+    pulseScale.value = withRepeat(withTiming(1.05, { duration: 2000 }), -1, true);
+  } else {
+    pulseScale.value = withSpring(1);
+  }
+}, [settings.isPlaying]);
+
+const pulseStyle = useAnimatedStyle(() => ({
+  transform: [{ scale: pulseScale.value }],
+}));
+
+// --- HARD STOP (Samsung-safe) ---
+const hardStopBackgroundSound = useCallback(async () => {
+  console.log("[BG] hardStop called. hasRef=", !!backgroundSoundRef.current);
+
+  const sound = backgroundSoundRef.current;
+  if (!sound) return;
+
+  // Detach ref first so nothing else can reuse it during async work
+  backgroundSoundRef.current = null;
+
+  try {
+    const status = await sound.getStatusAsync();
+    console.log(
+      "[BG] status before stop",
+      status.isLoaded,
+      (status as any).isPlaying,
+      (status as any).isLooping
+    );
+
+    if (status.isLoaded) {
+      try {
+        await sound.setStatusAsync({ shouldPlay: false, isLooping: false });
+      } catch {}
+      try {
+        await sound.stopAsync();
+      } catch {}
     }
-  }, [savedSettings]);
+  } catch (e) {
+    console.log("[BG] hardStopBackgroundSound error:", e);
+  }
 
-  useEffect(() => {
-    if (settings.isPlaying) {
-      pulseScale.value = withRepeat(withTiming(1.05, { duration: 2000 }), -1, true);
-    } else {
-      pulseScale.value = withSpring(1);
+  try {
+    await sound.unloadAsync();
+  } catch {}
+}, []);
+
+// --- PLAY BACKGROUND SOUND (single-flight; token only for sound changes) ---
+const playBackgroundSound = useCallback(async () => {
+  // If we're already starting, do not start again
+  if (bgStartingRef.current) {
+    console.log("[BG] playBackgroundSound ignored (already starting)");
+    return;
+  }
+
+  bgStartingRef.current = true;
+
+  // Token that invalidates only older background-start attempts
+  const myToken = ++bgStartTokenRef.current;
+
+  try {
+    setIsLoading(true);
+
+    // Hard stop any existing sound to prevent "ghost" instances
+    if (backgroundSoundRef.current) {
+      const old = backgroundSoundRef.current;
+      backgroundSoundRef.current = null;
+      try {
+        await old.setStatusAsync({ shouldPlay: false, isLooping: false });
+      } catch {}
+      try {
+        await old.stopAsync();
+      } catch {}
+      try {
+        await old.unloadAsync();
+      } catch {}
     }
-  }, [settings.isPlaying]);
 
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseScale.value }],
-  }));
+    await Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: true,
+      shouldDuckAndroid: true,
+    });
 
-  const fadeOutSound = async (sound: Audio.Sound, duration: number = CROSSFADE_DURATION) => {
-    try {
-      const status = await sound.getStatusAsync();
-      if (!status.isLoaded) return;
+    const selectedSound = getSoundById(settings.selectedSound) || getDefaultSound();
+    if (!selectedSound) {
+      console.log("[BG] no selectedSound");
+      return;
+    }
 
-      const startVolume = status.volume || 0.5;
-      const steps = 10;
-      const stepDuration = duration / steps;
-      const volumeStep = startVolume / steps;
+    console.log("[BG] selectedSound", settings.selectedSound, "url=", selectedSound.url);
 
-      for (let i = 0; i < steps; i++) {
-        await new Promise((resolve) => setTimeout(resolve, stepDuration));
-        const newVolume = Math.max(0, startVolume - volumeStep * (i + 1));
+    const { sound } = await Audio.Sound.createAsync(
+      { uri: selectedSound.url },
+      { isLooping: true, volume: 0, shouldPlay: true }
+    );
+
+    // If a newer start happened while we were awaiting, kill this one immediately
+    if (myToken !== bgStartTokenRef.current) {
+      console.log("[BG] stale create; unloading", { myToken, global: bgStartTokenRef.current });
+      try {
+        await sound.stopAsync();
+      } catch {}
+      try {
+        await sound.unloadAsync();
+      } catch {}
+      return;
+    }
+
+    backgroundSoundRef.current = sound;
+    console.log("[BG] ref set true");
+
+    const targetVolume = isDuckedRef.current
+      ? settings.backgroundVolume * DUCK_VOLUME
+      : settings.backgroundVolume;
+
+    const steps = 10;
+    const stepDuration = CROSSFADE_DURATION / steps;
+
+    for (let i = 0; i < steps; i++) {
+      // If paused or another sound start replaced us, stop fade-in
+      if (myToken !== bgStartTokenRef.current || backgroundSoundRef.current !== sound) {
+        console.log("[BG] fade aborted");
         try {
-          await sound.setVolumeAsync(newVolume);
+          await sound.stopAsync();
         } catch {}
-      }
-
-      await sound.stopAsync();
-      await sound.unloadAsync();
-    } catch (error) {
-      console.log("Fade out error:", error);
-    }
-  };
-
-  const playBackgroundSound = useCallback(async () => {
-    try {
-      setIsLoading(true);
-
-      if (backgroundSoundRef.current) {
-        const oldSound = backgroundSoundRef.current;
-        backgroundSoundRef.current = null;
-        fadeOutSound(oldSound);
-      }
-
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-        shouldDuckAndroid: true,
-      });
-
-      const selectedSound = getSoundById(settings.selectedSound) || getDefaultSound();
-      if (!selectedSound) {
-        setIsLoading(false);
+        try {
+          await sound.unloadAsync();
+        } catch {}
         return;
       }
 
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: selectedSound.url },
-        {
-          isLooping: true,
-          volume: 0,
-          shouldPlay: true,
-        }
-      );
-
-      backgroundSoundRef.current = sound;
-
-      const targetVolume = isDuckedRef.current
-        ? settings.backgroundVolume * DUCK_VOLUME
-        : settings.backgroundVolume;
-      const steps = 10;
-      const stepDuration = CROSSFADE_DURATION / steps;
-      const volumeStep = targetVolume / steps;
-
-      for (let i = 0; i < steps; i++) {
-        await new Promise((resolve) => setTimeout(resolve, stepDuration));
-        const newVolume = Math.min(targetVolume, volumeStep * (i + 1));
-        try {
-          if (backgroundSoundRef.current) {
-            await backgroundSoundRef.current.setVolumeAsync(newVolume);
-          }
-        } catch {}
-      }
-
-      setIsLoading(false);
-    } catch (error) {
-      console.error("Failed to play background sound:", error);
-      setIsLoading(false);
+      await new Promise((resolve) => setTimeout(resolve, stepDuration));
+      const newVolume = targetVolume * ((i + 1) / steps);
+      try {
+        await sound.setVolumeAsync(newVolume);
+      } catch {}
     }
-  }, [settings.selectedSound, settings.backgroundVolume]);
+  } catch (error) {
+    console.error("[BG] Failed to play background sound:", error);
+  } finally {
+    setIsLoading(false);
+    bgStartingRef.current = false;
+    console.log("[BG] playBackgroundSound finished; starting=false");
+  }
+}, [settings.selectedSound, settings.backgroundVolume]);
 
-  const stopBackgroundSound = useCallback(async () => {
-    if (backgroundSoundRef.current) {
-      await fadeOutSound(backgroundSoundRef.current);
-      backgroundSoundRef.current = null;
-    }
-  }, []);
-
-  const updateBackgroundVolume = useCallback(async (volume: number) => {
+// --- VOLUME CONTROL ---
+const updateBackgroundVolume = useCallback(
+  async (volume: number) => {
     normalVolumeRef.current = volume;
     if (backgroundSoundRef.current) {
       const targetVolume = isDuckedRef.current ? volume * DUCK_VOLUME : volume;
@@ -168,79 +234,117 @@ export default function AmbientScreen() {
         await backgroundSoundRef.current.setVolumeAsync(targetVolume);
       } catch {}
     }
-  }, []);
+  },
+  []
+);
 
-  const duckBackgroundVolume = useCallback((ducked: boolean) => {
-    isDuckedRef.current = ducked;
-    if (backgroundSoundRef.current) {
-      const targetVolume = ducked
-        ? normalVolumeRef.current * DUCK_VOLUME
-        : normalVolumeRef.current;
-      backgroundSoundRef.current.setVolumeAsync(targetVolume).catch(() => {});
+const duckBackgroundVolume = useCallback((ducked: boolean) => {
+  isDuckedRef.current = ducked;
+  if (backgroundSoundRef.current) {
+    const targetVolume = ducked ? normalVolumeRef.current * DUCK_VOLUME : normalVolumeRef.current;
+    backgroundSoundRef.current.setVolumeAsync(targetVolume).catch(() => {});
+  }
+}, []);
+
+// --- VOICE/TRIGGERS ---
+const triggerEncouragement = useCallback(async () => {
+  try {
+    const phrase = await generateAndPlayAffirmation(settings, duckBackgroundVolume);
+    setCurrentPhrase(phrase);
+    setTimeout(() => setCurrentPhrase(""), 5000);
+  } catch (error) {
+    console.error("Failed to play encouragement:", error);
+    const phrase = getRandomAffirmation(settings.voiceMode);
+    setCurrentPhrase(phrase);
+    setTimeout(() => setCurrentPhrase(""), 5000);
+  }
+}, [settings, duckBackgroundVolume]);
+
+// --- MAIN PLAY/PAUSE EFFECT ---
+// Background should ONLY restart for isPlaying / selectedSound / frequency.
+// DO NOT include voice/custom deps here.
+useEffect(() => {
+  // Always clear timer first
+  if (timerRef.current) {
+    clearInterval(timerRef.current);
+    timerRef.current = null;
+  }
+
+  if (settings.isPlaying) {
+    playBackgroundSound();
+
+    timerRef.current = setInterval(() => {
+      triggerEncouragement();
+    }, settings.encouragementFrequency * 60 * 1000);
+  } else {
+    // Invalidate any in-flight "start" so it won't resurrect sound
+    bgStartTokenRef.current += 1;
+    hardStopBackgroundSound();
+  }
+
+  return () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
-  }, []);
-
-  const triggerEncouragement = useCallback(async () => {
-    try {
-      const phrase = await generateAndPlayAffirmation(settings, duckBackgroundVolume);
-      setCurrentPhrase(phrase);
-      setTimeout(() => setCurrentPhrase(""), 5000);
-    } catch (error) {
-      console.error("Failed to play encouragement:", error);
-      const phrase = getRandomAffirmation(settings.voiceMode);
-      setCurrentPhrase(phrase);
-      setTimeout(() => setCurrentPhrase(""), 5000);
-    }
-  }, [settings, duckBackgroundVolume]);
-
-  useEffect(() => {
-    if (settings.isPlaying) {
-      playBackgroundSound();
-      timerRef.current = setInterval(() => {
-        triggerEncouragement();
-      }, settings.encouragementFrequency * 60 * 1000);
-    } else {
-      stopBackgroundSound();
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    }
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, [settings.isPlaying, settings.selectedSound, settings.encouragementFrequency]);
-
-  useEffect(() => {
-    updateBackgroundVolume(settings.backgroundVolume);
-  }, [settings.backgroundVolume, updateBackgroundVolume]);
-
-  useEffect(() => {
-    return () => {
-      if (backgroundSoundRef.current) {
-        backgroundSoundRef.current.unloadAsync().catch(() => {});
-      }
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, []);
-
-  const updateSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
-    const newSettings = { ...settings, [key]: value };
-    setSettings(newSettings);
-    updateSettings.mutate(newSettings);
   };
+}, [
+  settings.isPlaying,
+  settings.selectedSound,
+  settings.encouragementFrequency,
+  playBackgroundSound,
+  triggerEncouragement,
+  hardStopBackgroundSound,
+]);
 
-  const togglePlay = () => {
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+useEffect(() => {
+  updateBackgroundVolume(settings.backgroundVolume);
+}, [settings.backgroundVolume, updateBackgroundVolume]);
+
+useEffect(() => {
+  return () => {
+    // On unmount: invalidate any in-flight start, then hard stop + clear timer
+    bgStartTokenRef.current += 1;
+    hardStopBackgroundSound();
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
-    updateSetting("isPlaying", !settings.isPlaying);
   };
+}, [hardStopBackgroundSound]);
+
+
+// --- SETTINGS WRITE ---
+const updateSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
+  const newSettings = { ...settings, [key]: value };
+  setSettings(newSettings);
+  updateSettings.mutate(newSettings);
+};
+
+// --- PLAY/PAUSE BUTTON ---
+const togglePlay = async () => {
+  if (Platform.OS !== "web") {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }
+
+  if (settings.isPlaying) {
+    bgStartTokenRef.current++;
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    // Hard stop immediately so audio cannot “leak”
+    await hardStopBackgroundSound();
+
+    updateSetting("isPlaying", false);
+    return;
+  }
+
+  updateSetting("isPlaying", true);
+};
+
+
 
   const selectSound = (soundId: string) => {
     if (Platform.OS !== "web") {
@@ -277,6 +381,18 @@ export default function AmbientScreen() {
   const selectedSound = getSoundById(settings.selectedSound) || getDefaultSound();
   const selectedVoice = VOICE_CHARACTERS.find((v) => v.id === settings.selectedVoice);
   const selectedMode = VOICE_MODES.find((m) => m.id === settings.voiceMode);
+const modeLabel = settings.useCustomPhrases
+  ? "Custom"
+  : selectedMode?.name ?? "Mode";
+
+const statusLabel = settings.isPlaying
+  ? (isLoading ? "Loading..." : "Playing")
+  : "Paused";
+
+const playingLabel = `${modeLabel} ${statusLabel}`;
+;
+
+
 
   return (
     <ThemedView style={styles.container}>
@@ -289,34 +405,37 @@ export default function AmbientScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View entering={FadeIn.delay(50)} style={styles.topRow}>
-          <View style={styles.nameSectionFlex}>
-            <ThemedText style={[styles.nameLabel, { color: theme.textSecondary }]}>
-              Your Name (for personalized encouragements)
-            </ThemedText>
-            <TextInput
-              style={[
-                styles.nameInput,
-                {
-                  backgroundColor: theme.backgroundSecondary,
-                  borderColor: theme.border,
-                  color: theme.text,
-                },
-              ]}
-              placeholder="Enter your name..."
-              placeholderTextColor={theme.textSecondary}
-              value={settings.userName}
-              onChangeText={(text) => updateSetting("userName", text)}
-              testID="input-username"
-            />
-          </View>
-          <Pressable
-            onPress={toggleTheme}
-            style={[styles.themeToggle, { backgroundColor: theme.backgroundSecondary }]}
-            testID="button-theme-toggle"
-          >
-            <Feather name={getThemeIcon() as any} size={22} color={theme.primary} />
-          </Pressable>
-        </Animated.View>
+  <View style={styles.nameSectionFlex}>
+    <ThemedText style={[styles.nameLabel, { color: theme.textSecondary }]}>
+      Your Name (for personalized encouragements)
+    </ThemedText>
+
+    <TextInput
+      style={[
+        styles.nameInput,
+        {
+          backgroundColor: theme.backgroundSecondary,
+          borderColor: theme.border,
+          color: theme.text,
+        },
+      ]}
+      placeholder="Enter your name..."
+      placeholderTextColor={theme.textSecondary}
+      value={settings.userName}
+      onChangeText={(text) => updateSetting("userName", text)}
+      testID="input-username"
+    />
+  </View>
+
+  <Pressable
+    onPress={toggleTheme}
+    style={[styles.themeToggle, { backgroundColor: theme.backgroundSecondary }]}
+    testID="button-theme-toggle"
+  >
+    <Feather name={getThemeIcon() as any} size={22} color={theme.primary} />
+  </Pressable>
+</Animated.View>
+
 
         <Animated.View entering={FadeIn.delay(100)} style={styles.header}>
           <ThemedText style={[styles.title, { color: theme.text }]}>
@@ -334,9 +453,10 @@ export default function AmbientScreen() {
               { backgroundColor: settings.isPlaying ? theme.success : theme.textSecondary },
             ]}
           />
-          <ThemedText style={[styles.statusText, { color: theme.textSecondary }]}>
-            {selectedMode?.name} {settings.isPlaying ? (isLoading ? "Loading..." : "Playing") : "Paused"}
-          </ThemedText>
+            <ThemedText style={[styles.statusText, { color: theme.textSecondary }]}>
+    {playingLabel}
+  </ThemedText>
+
         </Animated.View>
 
         {currentPhrase ? (
