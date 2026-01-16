@@ -25,11 +25,36 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
   }
 }
 
+function coerceCustomPhrases(raw: any): CustomPhrase[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((p) => {
+      const text = typeof p?.text === "string" ? p.text : "";
+      const createdAt = typeof p?.createdAt === "number" ? p.createdAt : Date.now();
+      const id = typeof p?.id === "string" && p.id.trim() ? p.id : generateId();
+      return { id, text, createdAt } as CustomPhrase;
+    })
+    .filter((p) => p.text.trim().length > 0);
+}
+
 export async function getCustomPhrases(): Promise<CustomPhrase[]> {
   try {
     const data = await AsyncStorage.getItem(CUSTOM_PHRASES_KEY);
     if (!data) return [];
-    return JSON.parse(data);
+
+    const parsed = JSON.parse(data);
+    const coerced = coerceCustomPhrases(parsed);
+
+    // If we had to repair/migrate anything (missing ids, bad shapes), persist it.
+    // Compare lengths and also whether any item is missing an id in the original.
+    const originalHadIssues =
+      !Array.isArray(parsed) || parsed.some((p: any) => typeof p?.id !== "string" || !p.id);
+
+    if (originalHadIssues) {
+      await AsyncStorage.setItem(CUSTOM_PHRASES_KEY, JSON.stringify(coerced));
+    }
+
+    return coerced;
   } catch (error) {
     console.error("Failed to load custom phrases:", error);
     return [];
@@ -38,7 +63,9 @@ export async function getCustomPhrases(): Promise<CustomPhrase[]> {
 
 export async function saveCustomPhrases(phrases: CustomPhrase[]): Promise<void> {
   try {
-    await AsyncStorage.setItem(CUSTOM_PHRASES_KEY, JSON.stringify(phrases));
+    // Also normalize before saving (never store broken shapes)
+    const normalized = coerceCustomPhrases(phrases);
+    await AsyncStorage.setItem(CUSTOM_PHRASES_KEY, JSON.stringify(normalized));
   } catch (error) {
     console.error("Failed to save custom phrases:", error);
     throw error;

@@ -47,6 +47,8 @@ export default function PhrasesScreen() {
   const [selectedMode, setSelectedMode] = useState<AppSettings["voiceMode"]>(settings.voiceMode);
   const [newPhrase, setNewPhrase] = useState("");
   const [importText, setImportText] = useState("");
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
   const [showImport, setShowImport] = useState(false);
 
   const voiceGroup = VOICE_PHRASE_GROUPS.find((g) => g.voiceId === selectedVoice);
@@ -62,22 +64,32 @@ export default function PhrasesScreen() {
   };
 
   const handleDeletePhrase = (phrase: CustomPhrase) => {
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-    Alert.alert(
-      "Delete Phrase",
-      "Are you sure you want to remove this phrase?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => deletePhrase.mutate(phrase.id),
-        },
-      ]
-    );
-  };
+  console.log("[DELETE/UI] handleDeletePhrase called", phrase.id);
+
+  if (Platform.OS !== "web") {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }
+
+  // Tap twice to confirm delete (Alert is flaky in Android WebView/Capacitor)
+  if (pendingDeleteId !== phrase.id) {
+    console.log("[DELETE/UI] armed delete", phrase.id);
+    setPendingDeleteId(phrase.id);
+
+    // auto-cancel after 3 seconds
+    setTimeout(() => {
+      setPendingDeleteId((cur) => (cur === phrase.id ? null : cur));
+    }, 3000);
+
+    return;
+  }
+
+  console.log("[DELETE/UI] confirmed delete → mutate", phrase.id);
+  setPendingDeleteId(null);
+  deletePhrase.mutate(phrase.id);
+};
+
+
+
 
   const handleImport = () => {
     if (!importText.trim()) return;
@@ -408,24 +420,42 @@ export default function PhrasesScreen() {
         <View style={styles.phrasesList}>
           {customPhrases.map((phrase, index) => (
             <Animated.View
-              key={phrase.id}
-              entering={FadeInUp.delay(index * 30)}
-              layout={Layout.springify()}
-              style={[styles.phraseCard, { backgroundColor: theme.backgroundSecondary }]}
-            >
-              <View style={styles.phraseContent}>
-                <ThemedText style={[styles.phraseText, { color: theme.text }]}>
-                  "{phrase.text}"
-                </ThemedText>
-                <Pressable
-                  onPress={() => handleDeletePhrase(phrase)}
-                  style={styles.deleteButton}
-                  testID={`button-delete-phrase-${phrase.id}`}
-                >
-                  <Feather name="trash-2" size={16} color={theme.accent} />
-                </Pressable>
-              </View>
-            </Animated.View>
+  key={phrase.id}
+  entering={FadeInUp.delay(index * 30)}
+  layout={Layout.springify()}
+  style={[styles.phraseCard, { backgroundColor: theme.backgroundSecondary }]}
+>
+  <View style={styles.phraseContent}>
+    <View style={{ flex: 1 }}>
+      <ThemedText style={[styles.phraseText, { color: theme.text }]}>
+        "{phrase.text}"
+      </ThemedText>
+
+      {pendingDeleteId === phrase.id ? (
+        <ThemedText style={{ marginTop: 6, fontSize: 12, opacity: 0.8, color: theme.textSecondary }}>
+          Tap trash again to delete
+        </ThemedText>
+      ) : null}
+    </View>
+
+    <Pressable
+      onPress={() => {
+        handleDeletePhrase(phrase);
+      }}
+      hitSlop={16}
+      style={styles.deleteButton}
+      testID={`button-delete-phrase-${phrase.id}`}
+    >
+      <Feather
+        name="trash-2"
+        size={16}
+        color={pendingDeleteId === phrase.id ? "#FF3B30" : theme.accent}
+      />
+    </Pressable>
+  </View>
+</Animated.View>
+
+
           ))}
         </View>
       )}

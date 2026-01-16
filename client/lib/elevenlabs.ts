@@ -8,6 +8,28 @@ import { getCustomPhrases } from "./storage";
 
 let lastPhrase: string = "";
 
+// Keep a single global ref to the current TTS sound so we can hard-stop it on Pause
+let ttsSoundRef: Audio.Sound | null = null;
+let ttsCleanupTimer: ReturnType<typeof setTimeout> | null = null;
+
+export async function stopTtsPlayback(): Promise<void> {
+  try {
+    if (ttsCleanupTimer) {
+      clearTimeout(ttsCleanupTimer);
+      ttsCleanupTimer = null;
+    }
+
+    if (ttsSoundRef) {
+      // stopAsync is safer than pauseAsync for "kill it now"
+      await ttsSoundRef.stopAsync().catch(() => {});
+      await ttsSoundRef.unloadAsync().catch(() => {});
+      ttsSoundRef = null;
+    }
+  } catch {
+    // swallow
+  }
+}
+
 async function blobToBase64DataUri(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -68,18 +90,21 @@ export async function generateAndPlayAffirmation(
   const voice = VOICE_CHARACTERS.find((v) => v.id === voiceId);
   if (!voice) return phrase;
 
+  let audioUri: string | null = null;
+  let isObjectUrl = false;
+
   try {
-    if (duckBackgroundVolume) {
-      duckBackgroundVolume(true);
-    }
+    if (duckBackgroundVolume) duckBackgroundVolume(true);
+
+    // Ensure any previous TTS playback is fully stopped before starting a new one
+    await stopTtsPlayback();
 
     const apiUrl = getApiUrl();
     console.log("TTS endpoint:", new URL("/api/tts", apiUrl).toString());
+
     const response = await fetch(new URL("/api/tts", apiUrl).toString(), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         text: personalizedPhrase,
         voiceId: voice.elevenLabsVoiceId,
@@ -90,16 +115,14 @@ export async function generateAndPlayAffirmation(
       }),
     });
 
-          if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        console.warn("TTS API failed:", response.status, response.statusText, text);
-        if (duckBackgroundVolume) duckBackgroundVolume(false);
-        return phrase;
-      }
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      console.warn("TTS API failed:", response.status, response.statusText, text);
+      if (duckBackgroundVolume) duckBackgroundVolume(false);
+      return phrase;
+    }
 
     const audioBlob = await response.blob();
-    let audioUri: string;
-    let isObjectUrl = false;
 
     if (Platform.OS === "web") {
       audioUri = URL.createObjectURL(audioBlob);
@@ -113,24 +136,49 @@ export async function generateAndPlayAffirmation(
       { volume: settings.voiceVolume, shouldPlay: true }
     );
 
+    ttsSoundRef = sound;
+
+    // Failsafe: if Android never fires didJustFinish, we still unduck + cleanup.
+    if (ttsCleanupTimer) clearTimeout(ttsCleanupTimer);
+    ttsCleanupTimer = setTimeout(() => {
+      stopTtsPlayback().finally(() => {
+        if (isObjectUrl && audioUri) {
+          try {
+            URL.revokeObjectURL(audioUri);
+          } catch {}
+        }
+        if (duckBackgroundVolume) duckBackgroundVolume(false);
+      });
+    }, 20_000);
+
     sound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
-      if (status.isLoaded && status.didJustFinish) {
-        sound.unloadAsync();
-        if (isObjectUrl) {
-          URL.revokeObjectURL(audioUri);
-        }
-        if (duckBackgroundVolume) {
-          duckBackgroundVolume(false);
-        }
+      if (!status.isLoaded) return;
+
+      if (status.didJustFinish) {
+        stopTtsPlayback().finally(() => {
+          if (isObjectUrl && audioUri) {
+            try {
+              URL.revokeObjectURL(audioUri);
+            } catch {}
+          }
+          if (duckBackgroundVolume) duckBackgroundVolume(false);
+        });
       }
     });
 
     return personalizedPhrase;
   } catch (error) {
     console.error("Failed to generate affirmation:", error);
-    if (duckBackgroundVolume) {
-      duckBackgroundVolume(false);
+
+    // Always cleanup + unduck on error
+    await stopTtsPlayback().catch(() => {});
+    if (isObjectUrl && audioUri) {
+      try {
+        URL.revokeObjectURL(audioUri);
+      } catch {}
     }
+    if (duckBackgroundVolume) duckBackgroundVolume(false);
+
     return personalizedPhrase;
   }
 }

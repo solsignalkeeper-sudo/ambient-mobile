@@ -57,13 +57,26 @@ export function useAddCustomPhrase() {
 
 export function useDeleteCustomPhrase() {
   const queryClient = useQueryClient();
+
   return useMutation({
-    mutationFn: deleteCustomPhrase,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["customPhrases"] });
+    mutationFn: async (id: string) => {
+      console.log("[DELETE/HOOK] mutationFn called", id);
+      return deleteCustomPhrase(id);
+    },
+    onSuccess: async (_data, id) => {
+      console.log("[DELETE/HOOK] onSuccess", id);
+      await queryClient.invalidateQueries({ queryKey: ["customPhrases"] });
+      await queryClient.refetchQueries({ queryKey: ["customPhrases"] });
+    },
+    onError: (e, id) => {
+      console.log("[DELETE/HOOK] onError", id, String(e));
+    },
+    onSettled: (_data, _err, id) => {
+      console.log("[DELETE/HOOK] onSettled", id);
     },
   });
 }
+
 
 export function useUpdateCustomPhrase() {
   const queryClient = useQueryClient();

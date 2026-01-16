@@ -34,7 +34,6 @@
     "drizzle-orm": "^0.39.3",
     "drizzle-zod": "^0.7.0",
     "esbuild": "^0.27.2",
-    "expo": "^54.0.23",
     "expo-av": "^16.0.8",
     "expo-blur": "^15.0.7",
     "expo-constants": "~18.0.9",
@@ -71,6 +70,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
+    "@expo/cli": "^54.0.21",
     "@types/express": "^4.17.21",
     "@types/node": "24.10.0",
     "@types/react": "~19.1.0",
@@ -81,6 +81,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-import-resolver-node": "^0.3.9",
     "eslint-plugin-prettier": "^5.5.4",
+    "expo": "^54.0.31",
     "prettier": "3.6.2",
     "typescript": "~5.9.2"
   },
